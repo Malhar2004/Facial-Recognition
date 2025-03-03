@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Face Recognition System - New User Registration</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/jquery.validation/1.16.0/jquery.validate.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/jquery.validation/1.16.0/additional-methods.min.js"></script>
+    <style>
+        label.error {
+            color: red;
+        }
+
+        body {
+            caret-color: transparent;
+        }
+
+        .navbar-title {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .navbar {
+            margin-bottom: 20px;
+        }
+
+        .form-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .form-control {
+            width: 80%;
+            margin-bottom: 10px;
+        }
+
+        .btn {
+            width: 80%;
+        }
+
+        .image-container {
+            background-color: #f0f0f0;
+            padding: 20px;
+            width: 100%;
+            max-width: 700px;
+            margin: auto;
+        }
+
+        .image-container img,
+        .image-container video {
+            width: 100%;
+            height: auto;
+        }
+    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-light bg-light my-0">
+        <div class="container-fluid">
+            <h1 class="navbar-title mx-auto">Face Recognition System - New User Registration</h1>
+            <a href="{% url 'home' %}"><button class="btn btn-outline-success mx-2">Home</button></a>
+        </div>
+    </nav>
+    <div id="messages" style="height: 55px;">
+    </div>
+
+    <!-- Main Content -->
+    <div class="container-fluid">
+        <form id="registration-form">
+            {% csrf_token %}
+            <div class="row">
+                <!-- Left Side: Webcam Feed -->
+                <div class="col-lg-6 col-md-6 col-sm-12">
+                    <div class="image-container" id="container">
+                        <!-- Webcam feed will be displayed here -->
+
+                        <video id="video" autoplay></video>
+                        <img id="photo" name="photo" style="display: none;" alt="Captured Image">
+
+                    </div>
+                    <div class="text-center mt-3">
+                        <button id="capture" class="btn btn-primary">Click Picture</button>
+                    </div>
+                </div>
+                <!-- Right Side: Form -->
+                <form></form>
+                <div class="col-lg-6 col-md-6 col-sm-12 form-container">
+                    <input type="text" class="form-control" placeholder="Enter your name" name="Name" id="Name"
+                        style=" caret-color: black;">
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</body>
+
+<script>
+    $(document).ready(function () {
+        var $video = $('#video');
+        var $photo = $('#photo');
+        startwebcam();
+
+        $('#capture').click(function (event) {
+            event.preventDefault();
+            if ($(this).text() === "Click Picture") {
+                var $canvas = $('<canvas>')
+                $canvas.attr({
+                    width: $video[0].videoWidth,
+                    height: $video[0].videoHeight
+                })
+
+                var context = $canvas[0].getContext('2d');
+
+                context.drawImage($video[0], 0, 0, $canvas[0].width, $canvas[0].height)
+
+                var ImageData = $canvas[0].toDataURL("image/png")
+                $photo.attr('src', ImageData)
+                $photo.show()
+                $video.hide()
+
+                if (stream) {
+                    stream.getTracks().forEach(function (track) {
+                        track.stop();
+                    });
+                    stream = null;
+                }
+
+                // Hide the Capture button and show the Retake button
+                $(this).text('Retake');
+            }
+            else {
+                startwebcam();
+                $(this).text('Click Picture');
+            }
+        })
+
+        // validation
+        $('#registration-form').validate({
+            rules: {
+                Name: {
+                    required: true,
+                    minlength: 2,
+
+
+                }
+            },
+            messages: {
+                Name: {
+                    required: "Please enter your name",
+                    minlength: "Your name must consist of at least 2 characters",
+                }
+            },
+            submitHandler: function (form) {
+                if ($('form#registration-form img#photo').attr('src')) {
+                    person_registration()
+                }
+                else {
+                    alert("Click the picture for registration")
+                }
+
+
+            }
+        })
+    });
+
+    var stream = null;
+
+    function startwebcam() {
+        var $video = $('#video');
+        var $photo = $('#photo');
+        navigator.mediaDevices.getUserMedia({ 'video': true })
+            .then(function (camstream) {
+                stream = camstream
+                $video[0].srcObject = stream
+                $video.show()
+                $photo.hide()
+                $('form#registration-form img#photo').attr('src', '')
+            })
+            .catch(function (err) {
+                console.error("Error accessing webcam: " + err)
+                setTimeout(startwebcam, 1000)
+            })
+    }
+
+    function person_registration() {
+        var Image = $('form#registration-form img#photo').attr('src')
+        var Name = $('form#registration-form input#Name').val()
+
+        $.ajax({
+            url: "{% url 'person_registration' %}",
+            type: 'POST',
+            data: {
+                "name": Name,
+                "image": Image,
+                "csrfmiddlewaretoken": '{{ csrf_token }}'
+
+            },
+            success: function (data, status, xhr) {
+                if (data.status === 'success') {
+                    $("div#messages").html(` <div class="alert alert-success" role="alert">
+                        Registration successfull redirecting to home page.....
+                    </div>`)
+                    $("div#messages .alert").delay(3000).fadeOut(1000, function () {
+                        window.location.href = "{% url 'home' %}";
+                    })
+                }
+                else if (data.status === 'already Registered') {
+                    alert("you are already Registered")
+                }
+                else if (data.status === 'Multiple faces Detected') {
+                    alert("Multiple faces Detected")
+                    startwebcam();
+                    $("form#registration-form button#capture").text("Click Picture")
+                }
+                else if (data.status === "400") {
+                    $("div#messages").html(` <div class="alert alert-danger" role="alert">
+                        This face is already registered with the name ${data.name}
+                    </div>`)
+                    $("div#messages .alert").delay(3000).fadeOut(1000)
+                    startwebcam();
+                    $("form#registration-form button#capture").text("Click Picture")
+                }
+
+            },
+            error: function (error, status, xhr) {
+                alert("error" + error)
+            }
+
+        })
+
+    }
+
+</script>
+
+</html>

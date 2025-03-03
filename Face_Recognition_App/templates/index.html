@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Face Recognition System</title>
+    <!-- BOOTSTRAP -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- jQUERY -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
+    <!-- VALIDATION PULGIN -->
+    <script src="https://cdn.jsdelivr.net/jquery.validation/1.16.0/jquery.validate.min.js">
+    </script>
+    <script src="https://cdn.jsdelivr.net/jquery.validation/1.16.0/additional-methods.min.js">
+    </script>
+
+    <!-- DATATABLES -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+    <!-- <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> -->
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <style>
+        .navbar-title {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .navbar {
+            margin-bottom: 20px;
+        }
+
+        .image-container {
+            background-color: #f0f0f0;
+            padding: 20px;
+            width: 100%;
+            max-width: 640px;
+            margin: auto;
+        }
+
+        .image-container img,
+        .image-container video {
+            width: 100%;
+            height: auto;
+        }
+
+
+        .register-button {
+            margin-top: 20px;
+        }
+
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+        }
+
+        @media (max-width: 767px) {
+            .row-flex {
+                flex-direction: column;
+            }
+        }
+    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+</head>
+
+<body>
+    <!-- Navbar -->
+    <nav class="navbar bg-body-tertiary">
+        <div class="container-fluid">
+            <h1 class="mx-auto navbar-brand mb-0 navbar-title">Face Recognition System</h1>
+            <a href="{% url 'registration' %}"><button class="btn btn-outline-success">Register</button></a>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid main-content">
+        <div class="row row-flex">
+            <!-- Left Side: Image Box -->
+            <div class="col-lg-6 col-md-6 col-sm-12 d-flex justify-content-center align-items-center">
+                <div class="image-container">
+                    <!-- Webcam feed will be displayed here -->
+                    <!-- Replace img with video for live feed -->
+                    <video id="webcam" autoplay></video>
+                    <canvas id="canvas" style="display:none;"></canvas>
+                </div>
+            </div>
+            <!-- Right Side: Table -->
+            <div class="col-lg-6 col-md-6 col-sm-12 table-container">
+                <table class="table table-striped table-bordered" id="Detected-person-table">
+                    <thead class="thead-dark">
+                        <tr>
+                            <th scope="col">Name</th>
+                            <th scope="col">Date</th>
+                            <th scope="col">Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+</body>
+<script>
+    $(document).ready(function () {
+
+        var $video = $('video#webcam')
+        var $canvas = $("canvas#canvas")
+        
+        // In canvas context(image) is drawn in 2d format 
+        var context = $canvas[0].getContext('2d', {willReadFrequently: true})
+        previousFrame = null
+
+        // access webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(function (camstream) {
+                $video[0].srcObject = camstream
+                $video[0].play();
+            })
+            .catch(function (err) {
+                console.error("Error accessing webcam: " + err)
+            })
+
+        // after load of webcam successfully set canvas hight and width to same as video tag height and width
+        $video.on('loadedmetadata', function () {
+
+            function capture_frame() {
+                $canvas.attr({
+                    width: $video[0].videoWidth,
+                    height: $video[0].videoHeight
+                });
+
+
+                context.drawImage($video[0], 0, 0, $canvas[0].width, $canvas[0].height)
+                // encoding the capture image 
+                var imgdata = $canvas[0].toDataURL('image/jpeg')
+                $.ajax({
+                    type: 'POST',
+                    url: "{% url 'process_frame' %}",
+                    data: {
+                        "csrfmiddlewaretoken": '{{ csrf_token }}',
+                        "imagedata": imgdata
+                    },
+                    success: function (data, status, xhr) {
+                        if (data.status === "success") {
+                            $("table#Detected-person-table").DataTable().draw();
+                        }
+
+                    },
+                    error: function (error, status, xhr) {
+                        alert("error occuring" + error)
+                    }
+                })
+
+            }
+            // detecting the motion for increasing the efficency
+            function detect_motion() {
+                $canvas.attr({
+                    width: $video[0].videoWidth,
+                    height: $video[0].videoHeight
+                });
+
+
+                context.drawImage($video[0], 0, 0, $canvas[0].width, $canvas[0].height)
+                var current_frame = context.getImageData(0,0, $canvas[0].width, $canvas[0].height);
+                var motionCount = 0
+
+                if (previousFrame){
+                    var totalPixels = current_frame.data.length / 4
+                    for (var i=0; i<totalPixels; i+=4){
+                        var diff = Math.abs(current_frame.data[i] - previousFrame.data[i]) + Math.abs(current_frame.data[i+1]- previousFrame.data[i+1]) + Math.abs(current_frame.data[i+2] - previousFrame.data[i+2])
+                        if (diff > 30){
+                            motionCount++;
+                        }
+                    }
+                    console.log(motionCount)
+                    if (motionCount > 10000){
+                        capture_frame();
+                    }
+                }
+                previousFrame = current_frame
+            }
+
+            setInterval(detect_motion, 333)
+        })
+        // datatables
+        $('table#Detected-person-table').DataTable({
+            // for unabling server side procession of datatable such as filter, search, sort we have to unable this two parameters
+            processing: true,
+            serverSide: true,
+            paging: true,
+            searching: true,
+            responsive: true,
+            "order" : [[1,"desc"]],
+            ajax: {
+                url: '{% url "get_Detected_Person" %}',
+                type: 'GET',
+            },
+            // this act as success just like in  normal ajax
+            // we receving the json response with key data which contains value in the form of list so we retriving the data with help of index  
+            columns: [
+                { data: 0 },
+                { data: 1},
+                { data: 2 },
+            ],
+        })
+    })
+</script>
+
+</html>
